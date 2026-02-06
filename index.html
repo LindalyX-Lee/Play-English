@@ -341,7 +341,7 @@
         }
 
         .spell-input {
-            width: 55%;
+            width: 80%;
             padding: 12px;
             border: 2.5px solid var(--pink-light);
             border-radius: 14px;
@@ -360,22 +360,7 @@
             box-shadow: 0 0 0 3px rgba(255, 107, 157, 0.2);
         }
 
-        .spell-check-btn {
-            background: linear-gradient(135deg, #4cd137, #44bd32);
-            color: white;
-            border: none;
-            padding: 0 20px;
-            border-radius: 14px;
-            font-weight: bold;
-            font-size: 1rem;
-            min-height: 48px;
-            min-width: 80px;
-            cursor: pointer;
-        }
-
-        .spell-check-btn:active {
-            transform: scale(0.93);
-        }
+        /* spell-check-btn removed - 回车确认即可 */
 
         .spell-feedback {
             margin-top: 8px;
@@ -800,8 +785,7 @@
 
                     <div class="spell-box" id="spell-box" data-action="spell">
                         <div class="spell-controls">
-                            <input type="text" class="spell-input" id="spell-input" placeholder="输入单词..." autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">
-                            <button class="spell-check-btn" id="spell-check-btn">确认</button>
+                            <input type="text" class="spell-input" id="spell-input" placeholder="输入单词后按回车..." autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">
                         </div>
                         <div class="spell-feedback" id="spell-feedback"></div>
                     </div>
@@ -1149,10 +1133,7 @@
         }
     });
 
-    $('spell-check-btn').addEventListener('click', function(e) {
-        e.stopPropagation();
-        checkSpelling();
-    });
+    // 确认按钮已移除，仅保留回车触发
 
     // ============================================
     // CARD FLIP
@@ -1344,6 +1325,11 @@
 
     function onTouchEnd(e) {
         cardContainer.classList.remove('swiping');
+
+        // Guard: 如果onTouchStart没有初始化（交互元素上的触摸），直接跳过
+        if (touchStartX === 0 && touchStartY === 0) {
+            return;
+        }
 
         if (isSwiping) {
             const dx = e.changedTouches[0].clientX - touchStartX;
