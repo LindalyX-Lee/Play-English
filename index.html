@@ -1,0 +1,1521 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="单词大作战">
+    <link rel="manifest" href="manifest.json">
+    <title>Susie的单词大作战 - iPad触屏版 V21</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        /* ============================================
+           CSS RESET & iOS FIXES
+           ============================================ */
+        * {
+            -webkit-tap-highlight-color: transparent;
+            -webkit-touch-callout: none;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --pink-bg: #fff0f5;
+            --pink-dark: #ff6b9d;
+            --pink-light: #ff9eb5;
+            --seal-red: #e05e5e;
+            --text-brown: #6d4c41;
+            --card-radius: 28px;
+            /* 响应式卡片尺寸 - 用CSS clamp */
+            --card-width: clamp(320px, 55vw, 520px);
+            --card-height: clamp(480px, 68vh, 740px);
+            /* 安全区域 */
+            --safe-top: env(safe-area-inset-top, 20px);
+            --safe-bottom: env(safe-area-inset-bottom, 20px);
+        }
+
+        html, body {
+            overscroll-behavior: none;
+            overflow: hidden;
+            touch-action: manipulation;
+            height: 100%;
+            width: 100%;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, 'SF Pro Display', 'Segoe UI', "Microsoft YaHei", sans-serif;
+            background-color: var(--pink-bg);
+            background-image: radial-gradient(var(--pink-light) 18%, transparent 18%);
+            background-size: 30px 30px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            color: var(--text-brown);
+            padding-top: var(--safe-top);
+            padding-bottom: var(--safe-bottom);
+            position: fixed;
+            inset: 0;
+        }
+
+        /* ============================================
+           APP LAYOUT - 用flex纵向排布，自适应填满屏幕
+           ============================================ */
+        .app-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            height: 100%;
+            max-width: 600px;
+            padding: 0 16px;
+            overflow: hidden;
+        }
+
+        /* ============================================
+           HEADER
+           ============================================ */
+        header {
+            text-align: center;
+            padding: 10px 0 6px 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            flex-shrink: 0;
+        }
+
+        .title-stamp {
+            width: 44px; height: 44px;
+            background-color: #fff;
+            border: 3px dotted var(--seal-red);
+            border-radius: 10px;
+            display: flex; align-items: center; justify-content: center;
+            color: var(--seal-red);
+            font-weight: bold; font-size: 13px;
+            line-height: 1.1;
+            box-shadow: 2px 2px 0 rgba(224, 94, 94, 0.2);
+            transform: rotate(-5deg);
+        }
+
+        h1 {
+            color: var(--pink-dark);
+            margin: 0;
+            font-size: 1.5rem;
+            text-shadow: 2px 2px 0px #fff;
+        }
+
+        /* ============================================
+           MODE SWITCH (随机/顺序)
+           ============================================ */
+        .mode-switch {
+            background: rgba(255,255,255,0.92);
+            padding: 4px;
+            border-radius: 30px;
+            display: flex;
+            box-shadow: 0 4px 12px rgba(255, 107, 157, 0.12);
+            margin-bottom: 8px;
+            border: 2px solid #fff;
+            flex-shrink: 0;
+        }
+
+        .mode-btn {
+            padding: 10px 22px;
+            border-radius: 26px;
+            border: none;
+            background: transparent;
+            color: #aaa;
+            font-weight: bold;
+            font-size: 15px;
+            transition: 0.3s;
+            font-family: inherit;
+            display: flex; align-items: center; gap: 6px;
+            /* 触摸友好 - 最小44pt */
+            min-height: 44px;
+            cursor: pointer;
+        }
+
+        .mode-btn.active {
+            background: linear-gradient(135deg, var(--pink-light), var(--pink-dark));
+            color: white;
+            box-shadow: 0 2px 10px rgba(255, 107, 157, 0.35);
+        }
+
+        .mode-btn:active {
+            transform: scale(0.95);
+        }
+
+        /* ============================================
+           PROGRESS BAR
+           ============================================ */
+        .progress-container {
+            width: 100%;
+            background: rgba(255,255,255,0.95);
+            border-radius: 20px;
+            padding: 10px 18px;
+            margin-bottom: 8px;
+            box-shadow: 0 4px 12px rgba(255, 107, 157, 0.12);
+            font-size: 0.9rem;
+            display: flex; flex-direction: column; gap: 6px;
+            flex-shrink: 0;
+        }
+
+        .progress-bar-bg {
+            width: 100%; height: 8px;
+            background-color: #ffe6ee;
+            border-radius: 4px; overflow: hidden;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--pink-light), var(--pink-dark));
+            width: 0%; transition: width 0.4s ease;
+            border-radius: 4px;
+        }
+
+        /* ============================================
+           CONTROLS (导入/生词本/重置)
+           ============================================ */
+        .controls {
+            display: flex; gap: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-bottom: 8px;
+            width: 100%;
+            flex-shrink: 0;
+        }
+
+        input[type="file"] { display: none; }
+
+        .btn {
+            border: none;
+            padding: 12px 20px;
+            border-radius: 30px;
+            color: white;
+            font-weight: bold;
+            font-size: 15px;
+            display: flex; align-items: center; gap: 7px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.06);
+            /* 触摸友好 */
+            min-height: 48px;
+            cursor: pointer;
+            transition: transform 0.15s, box-shadow 0.15s;
+        }
+
+        .btn:active {
+            transform: scale(0.93);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+        }
+
+        .btn-pink { background: linear-gradient(135deg, var(--pink-light), var(--pink-dark)); }
+        .btn-blue { background: linear-gradient(135deg, #89d4ff, #4aa3ff); }
+        .btn-mint { background: linear-gradient(135deg, #a8e6cf, #1de9b6); color: #444; }
+
+        .upload-hint {
+            font-size: 0.82rem; color: #888;
+            background: rgba(255,255,255,0.85);
+            padding: 8px 14px; border-radius: 12px;
+            margin-bottom: 10px;
+            border: 1px dashed var(--pink-light);
+            text-align: center;
+            flex-shrink: 0;
+        }
+
+        /* ============================================
+           CARD CONTAINER - 核心触摸交互区域
+           ============================================ */
+        .card-zone {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            min-height: 0; /* flex子项可以shrink */
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card-container {
+            width: var(--card-width);
+            height: var(--card-height);
+            max-height: 100%;
+            perspective: 1200px;
+            position: relative;
+            /* 滑动时的位移 */
+            transition: transform 0.3s ease;
+        }
+
+        .card-container.swiping {
+            transition: none;
+        }
+
+        .flashcard {
+            width: 100%; height: 100%;
+            position: relative;
+            transform-style: preserve-3d;
+            transition: transform 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            border-radius: var(--card-radius);
+            box-shadow: 0 12px 40px rgba(255, 107, 157, 0.18);
+            touch-action: pan-y; /* 允许纵向滚动，横向手势我们自己处理 */
+        }
+
+        .flashcard.flipped { transform: rotateY(180deg); }
+
+        .card-face {
+            position: absolute; width: 100%; height: 100%;
+            backface-visibility: hidden;
+            -webkit-backface-visibility: hidden;
+            display: flex; flex-direction: column;
+            justify-content: center; align-items: center;
+            border-radius: var(--card-radius);
+            border: 5px solid #fff;
+            background-color: #fff;
+            padding: 20px;
+            box-sizing: border-box;
+            text-align: center;
+        }
+
+        .card-front { background: #fcf6f8; }
+        .card-back {
+            background: #fff;
+            transform: rotateY(180deg);
+            border: 5px solid var(--pink-light);
+        }
+
+        /* ============================================
+           IMAGE AREA
+           ============================================ */
+        .image-wrap {
+            position: relative;
+            width: 100%;
+            max-height: 35%;
+            border-radius: 16px;
+            overflow: hidden;
+            border: 3px solid var(--pink-light);
+            background: white;
+            display: flex; justify-content: center; align-items: center;
+            margin-bottom: 12px;
+            flex-shrink: 0;
+        }
+
+        /* iPad上没有hover，用tap指示替代 */
+        .image-wrap .img-tap-hint {
+            position: absolute;
+            bottom: 8px; right: 8px;
+            background: rgba(255, 107, 157, 0.8);
+            color: white;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.72rem;
+            font-weight: bold;
+            pointer-events: none;
+        }
+
+        .stamp-placeholder { width: 100%; height: 100%; padding: 10px; }
+        .custom-img { width: 100%; height: 100%; object-fit: contain; }
+
+        .word-text {
+            font-size: clamp(2rem, 6vw, 3rem);
+            font-weight: 800;
+            color: var(--text-brown);
+            margin-bottom: 10px;
+            line-height: 1.15;
+            word-wrap: break-word;
+            max-width: 100%;
+        }
+
+        /* ============================================
+           SPELL MODE
+           ============================================ */
+        .spell-box {
+            display: none;
+            margin-top: 8px;
+            width: 100%;
+        }
+
+        .spell-controls {
+            display: flex; gap: 8px; justify-content: center;
+        }
+
+        .spell-input {
+            width: 55%;
+            padding: 12px;
+            border: 2.5px solid var(--pink-light);
+            border-radius: 14px;
+            font-size: 1.3rem;
+            text-align: center;
+            outline: none;
+            color: var(--text-brown);
+            /* iOS input优化 */
+            -webkit-appearance: none;
+            appearance: none;
+            min-height: 48px;
+        }
+
+        .spell-input:focus {
+            border-color: var(--pink-dark);
+            box-shadow: 0 0 0 3px rgba(255, 107, 157, 0.2);
+        }
+
+        .spell-check-btn {
+            background: linear-gradient(135deg, #4cd137, #44bd32);
+            color: white;
+            border: none;
+            padding: 0 20px;
+            border-radius: 14px;
+            font-weight: bold;
+            font-size: 1rem;
+            min-height: 48px;
+            min-width: 80px;
+            cursor: pointer;
+        }
+
+        .spell-check-btn:active {
+            transform: scale(0.93);
+        }
+
+        .spell-feedback {
+            margin-top: 8px;
+            font-weight: bold;
+            min-height: 22px;
+            font-size: 1.05rem;
+        }
+
+        /* ============================================
+           PRONUNCIATION BUTTON
+           ============================================ */
+        .pronunciation-btn {
+            font-size: 1.05rem;
+            color: white;
+            background: linear-gradient(135deg, #ffaf40, #ff9f1a);
+            padding: 12px 36px;
+            border-radius: 50px;
+            margin-bottom: 8px;
+            box-shadow: 0 4px 12px rgba(255, 159, 26, 0.3);
+            display: flex; align-items: center; gap: 8px;
+            border: 2px solid #fff;
+            cursor: pointer;
+            transition: transform 0.15s;
+            min-height: 48px;
+        }
+
+        .pronunciation-btn:active { transform: scale(0.93); }
+        .pronunciation-btn.playing { animation: pulse 1s infinite; }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(255, 159, 26, 0.7); }
+            100% { box-shadow: 0 0 0 18px rgba(255, 159, 26, 0); }
+        }
+
+        /* ============================================
+           HINT & DEFINITION
+           ============================================ */
+        .hint-text {
+            position: absolute;
+            bottom: 15px;
+            font-size: 0.82rem;
+            color: #bbb;
+        }
+
+        .definition-text {
+            font-size: clamp(1.4rem, 4vw, 2rem);
+            line-height: 1.6;
+            color: #333;
+            font-weight: bold;
+        }
+
+        /* ============================================
+           FAVORITE BUTTON
+           ============================================ */
+        .fav-btn {
+            position: absolute;
+            top: 16px; right: 16px;
+            font-size: 32px;
+            color: #e0e0e0;
+            cursor: pointer;
+            z-index: 10;
+            transition: 0.2s;
+            /* 加大触摸区域 */
+            padding: 8px;
+        }
+
+        .fav-btn.active { color: #ff4757; transform: scale(1.1); }
+        .fav-pulse { animation: heartBeat 1s infinite; color: #ff9eb5; }
+
+        @keyframes heartBeat {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.3); }
+            100% { transform: scale(1); }
+        }
+
+        /* ============================================
+           ACTION AREA (下方按钮)
+           ============================================ */
+        .action-area {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            padding: 10px 0;
+            flex-shrink: 0;
+            flex-wrap: wrap;
+        }
+
+        .next-btn {
+            background: linear-gradient(135deg, #a29bfe, #6c5ce7);
+            color: white;
+            border: none;
+            padding: 16px 50px;
+            font-size: 1.15rem;
+            border-radius: 50px;
+            box-shadow: 0 5px 20px rgba(108, 92, 231, 0.3);
+            cursor: pointer;
+            font-weight: bold;
+            display: flex; align-items: center; gap: 10px;
+            min-height: 52px;
+            transition: transform 0.15s;
+        }
+
+        .next-btn:active { transform: scale(0.93); }
+
+        .spell-mode-toggle {
+            background: white;
+            border: 2.5px solid var(--pink-dark);
+            color: var(--pink-dark);
+            padding: 10px 22px;
+            border-radius: 30px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: 0.2s;
+            display: flex; align-items: center; gap: 8px;
+            font-weight: bold;
+            min-height: 48px;
+        }
+
+        .spell-mode-toggle:active { transform: scale(0.93); }
+        .spell-mode-toggle.active {
+            background: var(--pink-dark);
+            color: white;
+            border-color: var(--pink-dark);
+        }
+
+        /* ============================================
+           SWIPE HINT OVERLAY
+           ============================================ */
+        .swipe-hint {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.55);
+            color: white;
+            padding: 14px 28px;
+            border-radius: 20px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+            z-index: 50;
+            white-space: nowrap;
+        }
+
+        .swipe-hint.visible { opacity: 1; }
+
+        /* ============================================
+           MODAL (生词本)
+           ============================================ */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(255, 240, 245, 0.92);
+            z-index: 100;
+            justify-content: center;
+            align-items: center;
+            -webkit-backdrop-filter: blur(8px);
+            backdrop-filter: blur(8px);
+        }
+
+        .modal-content {
+            background: #fff;
+            width: 90%;
+            max-width: 520px;
+            height: 80vh;
+            border-radius: 28px;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            border: 3px solid var(--pink-light);
+            box-shadow: 0 20px 60px rgba(255, 107, 157, 0.2);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            flex-shrink: 0;
+        }
+
+        .close-modal-btn {
+            width: 44px; height: 44px;
+            border-radius: 50%;
+            border: none;
+            background: #f8f8f8;
+            font-size: 24px;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer;
+            color: #999;
+        }
+
+        .close-modal-btn:active {
+            background: #eee;
+            transform: scale(0.9);
+        }
+
+        .vocab-list {
+            overflow-y: auto;
+            flex: 1;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .vocab-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 14px 12px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .vocab-item .action-icon {
+            cursor: pointer;
+            font-size: 1.3rem;
+            margin-left: 12px;
+            padding: 8px; /* 加大触摸区域 */
+            color: #ffb7cd;
+        }
+
+        .vocab-item .action-icon:active {
+            color: #ff6b9d;
+            transform: scale(0.85);
+        }
+
+        /* ============================================
+           COMPLETION CELEBRATION
+           ============================================ */
+        .celebration {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(255, 240, 245, 0.95);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 90;
+            -webkit-backdrop-filter: blur(10px);
+            backdrop-filter: blur(10px);
+        }
+
+        .celebration h2 {
+            font-size: 2rem;
+            color: var(--pink-dark);
+            margin-bottom: 20px;
+        }
+
+        .celebration .emoji-big {
+            font-size: 4rem;
+            margin-bottom: 20px;
+        }
+
+        /* ============================================
+           ONBOARDING / FIRST-USE SWIPE TUTORIAL
+           ============================================ */
+        .tutorial-overlay {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.6);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 200;
+            color: white;
+            text-align: center;
+            padding: 40px;
+        }
+
+        .tutorial-overlay .gesture-icon {
+            font-size: 3rem;
+            margin-bottom: 20px;
+            animation: swipeAnim 2s ease-in-out infinite;
+        }
+
+        @keyframes swipeAnim {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-30px); }
+            75% { transform: translateX(30px); }
+        }
+
+        .tutorial-overlay p {
+            font-size: 1.2rem;
+            margin-bottom: 8px;
+            line-height: 1.6;
+        }
+
+        .tutorial-dismiss {
+            margin-top: 30px;
+            padding: 14px 40px;
+            border-radius: 30px;
+            border: 2px solid white;
+            background: transparent;
+            color: white;
+            font-size: 1.1rem;
+            font-weight: bold;
+            cursor: pointer;
+            min-height: 48px;
+        }
+
+        .tutorial-dismiss:active {
+            background: rgba(255,255,255,0.2);
+        }
+
+        /* ============================================
+           RESPONSIVE ADJUSTMENTS
+           ============================================ */
+        /* 竖屏iPad */
+        @media (min-width: 768px) and (orientation: portrait) {
+            :root {
+                --card-width: min(55vw, 480px);
+                --card-height: min(62vh, 680px);
+            }
+            .word-text { font-size: 2.8rem; }
+            .definition-text { font-size: 1.8rem; }
+        }
+
+        /* 横屏iPad */
+        @media (min-width: 768px) and (orientation: landscape) {
+            :root {
+                --card-width: min(38vw, 420px);
+                --card-height: min(78vh, 620px);
+            }
+            .app-wrapper {
+                max-width: 800px;
+            }
+        }
+
+        /* 小屏手机 fallback */
+        @media (max-width: 400px) {
+            :root {
+                --card-width: 92vw;
+                --card-height: 60vh;
+            }
+            .btn { padding: 10px 14px; font-size: 13px; }
+            .next-btn { padding: 14px 36px; font-size: 1rem; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="app-wrapper">
+    <header>
+        <div class="title-stamp">
+            <div>逢考<br>必过</div>
+        </div>
+        <h1>单词大作战</h1>
+    </header>
+
+    <div class="mode-switch" id="mode-switch" style="display:none;">
+        <button class="mode-btn active" id="btn-random" onclick="setMode('random')">
+            <i class="fas fa-random"></i> 随机乱序
+        </button>
+        <button class="mode-btn" id="btn-order" onclick="setMode('order')">
+            <i class="fas fa-sort-numeric-down"></i> 顺序背诵
+        </button>
+    </div>
+
+    <div class="progress-container" id="progress-box" style="display:none;">
+        <div style="display:flex; justify-content:space-between;">
+            <span><i class="fas fa-flag-checkered" style="color:var(--pink-dark)"></i> 进度</span>
+            <span id="progress-number" style="font-weight:bold; color:var(--pink-dark)">0 / 0</span>
+        </div>
+        <div class="progress-bar-bg"><div class="progress-bar-fill" id="progress-fill"></div></div>
+    </div>
+
+    <div class="controls">
+        <label for="excel-upload" class="btn btn-pink">
+            <i class="fas fa-file-excel"></i> 更换词库
+        </label>
+        <input type="file" id="excel-upload" accept=".xlsx, .xls">
+
+        <button class="btn btn-blue" onclick="showVocabBook()">
+            <i class="fas fa-book-open"></i> 生词本 <span id="fav-count-badge" style="background:rgba(255,255,255,0.3);padding:2px 8px;border-radius:10px;font-size:0.8em;margin-left:5px;">0</span>
+        </button>
+
+        <button class="btn btn-mint" onclick="resetProgress()">
+            <i class="fas fa-redo"></i> 重置
+        </button>
+
+        <input type="file" id="img-upload" accept="image/*">
+    </div>
+
+    <div class="upload-hint" id="hint-msg" style="display:none;">
+        更换词库：Excel格式 <b>A列</b>单词 | <b>B列</b>释义 | <b>C列</b>图片文件名(选填)
+    </div>
+
+    <!-- ===== 卡片区域 ===== -->
+    <div class="card-zone" id="card-zone" style="display:none;">
+        <div class="swipe-hint" id="swipe-hint"></div>
+
+        <div class="card-container" id="card-container">
+            <div class="flashcard" id="flashcard">
+                <div class="card-face card-front">
+                    <i class="fas fa-heart fav-btn" id="fav-btn-front" data-action="fav"></i>
+
+                    <label for="img-upload" class="image-wrap" data-action="img-upload">
+                        <div id="img-container" style="width:100%;height:100%;display:flex;justify-content:center;align-items:center;">
+                            <div id="default-stamp" class="stamp-placeholder">
+                                <svg width="100%" height="100%" viewBox="0 0 200 160" xmlns="http://www.w3.org/2000/svg">
+                                    <rect x="20" y="10" width="160" height="140" rx="20" ry="20" fill="#fff0f5" stroke="#ff9eb5" stroke-width="4" stroke-dasharray="10,5"/>
+                                    <rect x="35" y="25" width="130" height="110" rx="10" ry="10" fill="none" stroke="#e05e5e" stroke-width="2"/>
+                                    <text x="65" y="80" font-family="serif" font-size="50" fill="#e05e5e" font-weight="bold" text-anchor="middle">逢</text>
+                                    <text x="135" y="80" font-family="serif" font-size="50" fill="#e05e5e" font-weight="bold" text-anchor="middle">考</text>
+                                    <text x="65" y="125" font-family="serif" font-size="50" fill="#e05e5e" font-weight="bold" text-anchor="middle">必</text>
+                                    <text x="135" y="125" font-family="serif" font-size="50" fill="#e05e5e" font-weight="bold" text-anchor="middle">过</text>
+                                </svg>
+                            </div>
+                            <img id="custom-img-display" class="custom-img" style="display:none;" alt="User Image">
+                            <img id="excel-img-display" class="custom-img" style="display:none;" alt="Word Image">
+                        </div>
+                        <span class="img-tap-hint"><i class="fas fa-camera"></i> 换图</span>
+                    </label>
+
+                    <div class="word-text" id="word-display">Loading...</div>
+
+                    <div class="spell-box" id="spell-box" data-action="spell">
+                        <div class="spell-controls">
+                            <input type="text" class="spell-input" id="spell-input" placeholder="输入单词..." autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">
+                            <button class="spell-check-btn" id="spell-check-btn">确认</button>
+                        </div>
+                        <div class="spell-feedback" id="spell-feedback"></div>
+                    </div>
+
+                    <div class="pronunciation-btn" id="audio-btn" data-action="audio">
+                        <i class="fas fa-volume-up"></i> 听发音
+                    </div>
+
+                    <div class="hint-text">点击卡片翻转 | 左右滑动切换</div>
+                </div>
+
+                <div class="card-face card-back">
+                    <i class="fas fa-heart fav-btn" id="fav-btn-back" data-action="fav"></i>
+                    <div class="definition-text" id="def-display">...</div>
+                    <div style="margin-top: 20px; font-size: 0.95rem; color: #ff9eb5;">
+                        (没记住？点击右上角 ❤ 加入生词本)
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== 底部操作 ===== -->
+    <div class="action-area" id="action-area" style="display:none;">
+        <button class="spell-mode-toggle" id="mode-btn-text" onclick="toggleSpellMode()">
+            <i class="fas fa-pencil-alt"></i> 开启听写模式
+        </button>
+        <button class="next-btn" id="next-btn" onclick="nextCardTrigger()">
+            下一个 <i class="fas fa-arrow-right"></i>
+        </button>
+    </div>
+</div>
+
+<!-- ===== 生词本弹窗 ===== -->
+<div class="modal" id="vocab-modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 style="margin:0;color:var(--pink-dark)"><i class="fas fa-book-open"></i> 生词本</h3>
+            <button class="close-modal-btn" onclick="closeModal()">&times;</button>
+        </div>
+        <div class="vocab-list" id="vocab-list"></div>
+    </div>
+</div>
+
+<!-- ===== 首次使用教程 ===== -->
+<div class="tutorial-overlay" id="tutorial" style="display:none;">
+    <div class="gesture-icon">
+        <i class="fas fa-hand-pointer"></i>
+    </div>
+    <p><b>触摸操作指南</b></p>
+    <p>👆 <b>点击卡片</b> = 翻转查看释义</p>
+    <p>👈 <b>左滑</b> = 下一个单词</p>
+    <p>👉 <b>右滑</b> = 上一个单词</p>
+    <p>❤️ <b>点心形</b> = 加入/移出生词本</p>
+    <button class="tutorial-dismiss" onclick="dismissTutorial()">知道了，开始背单词！</button>
+</div>
+
+<script>
+    // ============================================
+    // EMBEDDED DEFAULT WORD DATA (人教版八上英语 543词)
+    // 可通过「更换词库」按钮导入新Excel覆盖
+    // ============================================
+    const EMBEDDED_WORDS = [{"id": 0, "word": "ancient", "def": "adj. 古代的；古老的", "img": "ancient.jpg"}, {"id": 1, "word": "camp", "def": "n. 度假营；营地 v. 露营；宿营", "img": "camp.jpg"}, {"id": 2, "word": "landscape", "def": "n. 风景；景色", "img": "landscape.jpg"}, {"id": 3, "word": "strange", "def": "adj. 奇怪的；陌生的", "img": "strange.jpg"}, {"id": 4, "word": "vacation", "def": "n. 假期；度假", "img": "vacation.jpg"}, {"id": 5, "word": "fantastic", "def": "adj. 极好的；了不起的", "img": "fantastic.jpg"}, {"id": 6, "word": "town", "def": "n. 镇；商业区", "img": ""}, {"id": 7, "word": "breath", "def": "n. 呼吸的空气；一口气", "img": ""}, {"id": 8, "word": "take sb's breath away", "def": "令人惊叹；让人叹绝", "img": ""}, {"id": 9, "word": "especially", "def": "adv. 尤其；特别", "img": "especially.jpg"}, {"id": 10, "word": "steamed chicken soup", "def": "汽锅鸡", "img": "steamed chicken soup.jpg"}, {"id": 11, "word": "anywhere", "def": "adv. & pron. 在任何地方；随便哪个地方", "img": ""}, {"id": 12, "word": "nothing", "def": "pron. 没有任何东西；没有事", "img": ""}, {"id": 13, "word": "scenery", "def": "n. 风景；景色", "img": ""}, {"id": 14, "word": "silk", "def": "n. 丝绸；(蚕)丝", "img": ""}, {"id": 15, "word": "scarf", "def": "n. 围巾；披巾", "img": ""}, {"id": 16, "word": "nothing but", "def": "只有；只是", "img": ""}, {"id": 17, "word": "hotel", "def": "n. 旅馆；旅社", "img": ""}, {"id": 18, "word": "comfortable", "def": "adj. 使人舒服的；舒适的", "img": ""}, {"id": 19, "word": "ready", "def": "adj. 准备好的；现成的 adv. 已做完；已完成", "img": ""}, {"id": 20, "word": "ready to do sth", "def": "马上要(做某事)；愿意做(某事)", "img": ""}, {"id": 21, "word": "somewhere", "def": "adv. 在某处；到某处 pron. 某处；某个地方", "img": ""}, {"id": 22, "word": "sky", "def": "n. 天；天空", "img": ""}, {"id": 23, "word": "bored", "def": "adj. 厌倦的；烦闷的", "img": ""}, {"id": 24, "word": "stand up", "def": "站起；起立", "img": ""}, {"id": 25, "word": "towards", "def": "prep. 向；朝", "img": ""}, {"id": 26, "word": "rainbow", "def": "n. 虹；彩虹", "img": ""}, {"id": 27, "word": "square", "def": "n. 广场；正方形 adj. 正方形的；平方的", "img": ""}, {"id": 28, "word": "during", "def": "prep. 在……期间", "img": ""}, {"id": 29, "word": "victory", "def": "n. 胜利；成功", "img": ""}, {"id": 30, "word": "Russian", "def": "adj. 俄罗斯的；俄罗斯人的 n. 俄罗斯人；俄语", "img": ""}, {"id": 31, "word": "fight", "def": "n. 战斗；搏斗；斗争 v. (fought) 打仗；打架", "img": ""}, {"id": 32, "word": "against", "def": "prep. 反对；与……相反；紧靠", "img": ""}, {"id": 33, "word": "fight against", "def": "与……作斗争", "img": ""}, {"id": 34, "word": "guide", "def": "n. 导游；指南；手册 v. 给某人领路；指导", "img": ""}, {"id": 35, "word": "artwork", "def": "n. 艺术作品；插图", "img": ""}, {"id": 36, "word": "thousands of", "def": "数以千计的；成千上万的", "img": ""}, {"id": 37, "word": "tear", "def": "n. 眼泪；泪水", "img": ""}, {"id": 38, "word": "remind", "def": "v. 提醒；使想起", "img": ""}, {"id": 39, "word": "peace", "def": "n. 和平；太平", "img": ""}, {"id": 40, "word": "easily", "def": "adv. 容易地；轻易地", "img": ""}, {"id": 41, "word": "forget", "def": "v. (forgot) 忘记；遗忘", "img": ""}, {"id": 42, "word": "noon", "def": "n. 正午；中午", "img": ""}, {"id": 43, "word": "sick", "def": "adj. 生病的；恶心的", "img": ""}, {"id": 44, "word": "station", "def": "n. 车站；火车站；公共汽车站", "img": ""}, {"id": 45, "word": "palace", "def": "n. 王宫；宫殿", "img": ""}, {"id": 46, "word": "accordion", "def": "n. 手风琴", "img": "accordion.jpg"}, {"id": 47, "word": "get together", "def": "聚会；相聚", "img": ""}, {"id": 48, "word": "in the sun", "def": "在阳光下", "img": ""}, {"id": 49, "word": "tower", "def": "n. 塔；塔楼", "img": ""}, {"id": 50, "word": "might", "def": "modal v. 可能；可以", "img": ""}, {"id": 51, "word": "budget", "def": "n. 预算 v. 把……编入预算；精打细算", "img": ""}, {"id": 52, "word": "passport", "def": "n. 护照", "img": ""}, {"id": 53, "word": "forgetful", "def": "adj. 健忘的；好忘事的", "img": ""}, {"id": 54, "word": "faraway", "def": "adj. 远方的；遥远的", "img": ""}, {"id": 55, "word": "regular", "def": "adj. 半常的；有规律的", "img": ""}, {"id": 56, "word": "countryside", "def": "n. 乡村；农村", "img": ""}, {"id": 57, "word": "turn around", "def": "转身；翻转", "img": ""}, {"id": 58, "word": "surprised", "def": "adj. 惊奇的；惊讶的", "img": ""}, {"id": 59, "word": "deer", "def": "n. (pl. deer) 鹿", "img": ""}, {"id": 60, "word": "probably", "def": "adv. 很可能；大概", "img": ""}, {"id": 61, "word": "look for", "def": "寻找", "img": ""}, {"id": 62, "word": "Guest-Greeting Pine", "def": "迎客松", "img": "Guest-Greeting Pine.jpg"}, {"id": 63, "word": "Sea of Clouds", "def": "云海", "img": "Sea of Clouds.jpg"}, {"id": 64, "word": "California", "def": "加利福尼亚(美国州名)", "img": ""}, {"id": 65, "word": "Red Square", "def": "红场", "img": ""}, {"id": 66, "word": "Alexander Garden", "def": "亚历山大花园", "img": ""}, {"id": 67, "word": "Vincent", "def": "文森特", "img": ""}, {"id": 68, "word": "Moscow", "def": "莫斯科(俄罗斯首都)", "img": ""}, {"id": 69, "word": "Russia", "def": "俄罗斯", "img": ""}, {"id": 70, "word": "the Victory Museum", "def": "胜利博物馆", "img": ""}, {"id": 71, "word": "Nazi", "def": "n. 纳粹党人；纳粹分子", "img": ""}, {"id": 72, "word": "World War II", "def": "第二次世界大战", "img": ""}, {"id": 73, "word": "Moscow Metro", "def": "莫斯科地铁", "img": ""}, {"id": 74, "word": "Scotland", "def": "苏格兰", "img": ""}, {"id": 75, "word": "pack", "def": "v. 打包；收拾", "img": ""}, {"id": 76, "word": "pack up", "def": "打包", "img": ""}, {"id": 77, "word": "bathroom", "def": "n. 浴室；洗手间", "img": ""}, {"id": 78, "word": "sort", "def": "v. 把……分类；整理 n. 种类", "img": ""}, {"id": 79, "word": "bedroom", "def": "n. 卧室", "img": ""}, {"id": 80, "word": "balcony", "def": "n. 阳台", "img": ""}, {"id": 81, "word": "hang up", "def": "挂起；挂断电话", "img": ""}, {"id": 82, "word": "invite", "def": "v. 邀请", "img": ""}, {"id": 83, "word": "living room", "def": "客厅", "img": ""}, {"id": 84, "word": "arrival", "def": "n. 到达", "img": ""}, {"id": 85, "word": "yet", "def": "adv. 还 conj. 但是", "img": ""}, {"id": 86, "word": "add", "def": "v. 添加；加", "img": ""}, {"id": 87, "word": "add sth to sth", "def": "把……加入……", "img": ""}, {"id": 88, "word": "go shopping", "def": "去购物", "img": ""}, {"id": 89, "word": "biscuit", "def": "n. 饼干", "img": ""}, {"id": 90, "word": "borrow", "def": "v. 借", "img": ""}, {"id": 91, "word": "plan", "def": "v. 策划；打算 n. 计划；方案", "img": ""}, {"id": 92, "word": "treasure", "def": "n. 宝物；财富 v. 珍视", "img": ""}, {"id": 93, "word": "hunt", "def": "n. 搜寻；狩猎 v. 搜寻；打猎", "img": ""}, {"id": 94, "word": "treasure hunt", "def": "寻宝游戏", "img": ""}, {"id": 95, "word": "lift", "def": "n. 搭便车；电梯 v. 举起；抬起", "img": ""}, {"id": 96, "word": "give sb a lift", "def": "开车顺便送某人", "img": ""}, {"id": 97, "word": "until", "def": "prep. 到……时；直到……为止", "img": ""}, {"id": 98, "word": "be careful with", "def": "注意；当心", "img": ""}, {"id": 99, "word": "movie", "def": "n. 电影", "img": ""}, {"id": 100, "word": "the movies", "def": "电影院；电影产业", "img": ""}, {"id": 101, "word": "dead", "def": "adj. 不运行的；死的", "img": ""}, {"id": 102, "word": "note", "def": "n. 笔记；记录；便条 v. 注意；指出", "img": ""}, {"id": 103, "word": "take notes", "def": "做笔记", "img": ""}, {"id": 104, "word": "clean up", "def": "清扫", "img": ""}, {"id": 105, "word": "community", "def": "n. 社区；社团", "img": "community.jpg"}, {"id": 106, "word": "rubbish", "def": "n. 垃圾", "img": "rubbish.jpg"}, {"id": 107, "word": "almost", "def": "adv. 差不多；几乎", "img": "almost.jpg"}, {"id": 108, "word": "journey", "def": "n. 旅行；历程 v. 旅行", "img": ""}, {"id": 109, "word": "pull", "def": "v. 拉；拖；拔", "img": ""}, {"id": 110, "word": "luggage", "def": "n. 行李", "img": ""}, {"id": 111, "word": "ah", "def": "interj. 啊(表示高兴、惊奇等)", "img": ""}, {"id": 112, "word": "share sth with sb", "def": "把……与……分享", "img": ""}, {"id": 113, "word": "mm", "def": "interj. 嗯(表示喜欢、同意等)", "img": ""}, {"id": 114, "word": "familiar", "def": "adj. 熟悉的", "img": ""}, {"id": 115, "word": "joke", "def": "n. 笑话 v. 开玩笑", "img": ""}, {"id": 116, "word": "several", "def": "pron. 几个；一些 adj. 各自的", "img": ""}, {"id": 117, "word": "nod", "def": "v. & n. 点(头)", "img": ""}, {"id": 118, "word": "writer", "def": "n. 作者", "img": ""}, {"id": 119, "word": "text", "def": "n. 正文；文本 v. (用手机给某人)发短信", "img": ""}, {"id": 120, "word": "describe", "def": "v. 描述；形容", "img": "describe.jpg"}, {"id": 121, "word": "wherever", "def": "adv. & conj. 无论去哪里；在任何地方", "img": "wherever.jpg"}, {"id": 122, "word": "matter", "def": "v. 要紧 n. 问题", "img": ""}, {"id": 123, "word": "no matter", "def": "不论；不要紧", "img": ""}, {"id": 124, "word": "perhaps", "def": "adv. 也许；可能", "img": ""}, {"id": 125, "word": "plate", "def": "n. 盘子；碟子", "img": ""}, {"id": 126, "word": "freshly", "def": "adv. 刚刚", "img": ""}, {"id": 127, "word": "smell", "def": "v. 发臭；闻到 n. 气味；臭味", "img": ""}, {"id": 128, "word": "joy", "def": "n. 喜悦；乐趣", "img": ""}, {"id": 129, "word": "apartment", "def": "n. 房间；公寓套房", "img": ""}, {"id": 130, "word": "block", "def": "n. 大楼；街区；大块", "img": ""}, {"id": 131, "word": "decorate", "def": "v. 装饰；装潢", "img": ""}, {"id": 132, "word": "cover", "def": "v. 遮盖；包括 n. 遮盖物；封皮", "img": ""}, {"id": 133, "word": "poster", "def": "n. 海报", "img": ""}, {"id": 134, "word": "scissors", "def": "n. 剪刀", "img": ""}, {"id": 135, "word": "glue", "def": "n. 胶水 v. 粘贴", "img": ""}, {"id": 136, "word": "paper cutting", "def": "剪纸", "img": ""}, {"id": 137, "word": "compare", "def": "v. 比较；对比", "img": ""}, {"id": 138, "word": "shy", "def": "adj. 害羞的", "img": ""}, {"id": 139, "word": "lazy", "def": "adj. 懒惰的；懒洋洋的", "img": ""}, {"id": 140, "word": "loud", "def": "adv. 响亮地 adj. 大声的", "img": ""}, {"id": 141, "word": "outgoing", "def": "adj. 外向的", "img": ""}, {"id": 142, "word": "hard-working", "def": "adj. 勤奋的", "img": ""}, {"id": 143, "word": "perform", "def": "v. 表演；执行", "img": ""}, {"id": 144, "word": "solve", "def": "v. 解决；解答", "img": ""}, {"id": 145, "word": "flute", "def": "n. 长笛", "img": ""}, {"id": 146, "word": "congratulation", "def": "n. 祝贺；恭喜", "img": ""}, {"id": 147, "word": "Congratulations (on ...)", "def": "(对……表示)祝贺！", "img": ""}, {"id": 148, "word": "prize", "def": "n. 奖；奖励", "img": ""}, {"id": 149, "word": "attend", "def": "v. 参加；出席", "img": ""}, {"id": 150, "word": "as ... as ...", "def": "像……一样……", "img": ""}, {"id": 151, "word": "besides", "def": "prep. 除……之外(还) adv. 而且", "img": ""}, {"id": 152, "word": "spare", "def": "adj. 空闲的；备用的 v. 抽出；拨出", "img": ""}, {"id": 153, "word": "spare time", "def": "空闲时间", "img": ""}, {"id": 154, "word": "pleasure", "def": "n. 乐事；愉快；荣幸", "img": ""}, {"id": 155, "word": "have sth in common", "def": "有共同之处", "img": ""}, {"id": 156, "word": "appearance", "def": "n. 外表；露面", "img": ""}, {"id": 157, "word": "personality", "def": "n. 性格；品质", "img": ""}, {"id": 158, "word": "serious", "def": "adj. 严肃的；严重的", "img": ""}, {"id": 159, "word": "strength", "def": "n. 优势；力量", "img": ""}, {"id": 160, "word": "fact", "def": "n. 事实；现实", "img": ""}, {"id": 161, "word": "slim", "def": "adj. 苗条的；薄的", "img": ""}, {"id": 162, "word": "population", "def": "n. 人口", "img": ""}, {"id": 163, "word": "km", "def": "千米；公里", "img": ""}, {"id": 164, "word": "average", "def": "adj. 平均的；平常的", "img": ""}, {"id": 165, "word": "rainfall", "def": "n. 降雨量", "img": ""}, {"id": 166, "word": "per", "def": "prep. 每", "img": ""}, {"id": 167, "word": "mm", "def": "毫米", "img": ""}, {"id": 168, "word": "pleasant", "def": "adj. 宜人的；友好的", "img": ""}, {"id": 169, "word": "alike", "def": "adj. 相像的 adv. 相似地", "img": ""}, {"id": 170, "word": "mirror", "def": "n. 镜子", "img": ""}, {"id": 171, "word": "interest", "def": "n. 业余爱好；兴趣 v. 使感兴趣", "img": ""}, {"id": 172, "word": "novel", "def": "n. 小说", "img": ""}, {"id": 173, "word": "difference", "def": "n. 差异", "img": ""}, {"id": 174, "word": "sense", "def": "n. 理解力；感觉", "img": ""}, {"id": 175, "word": "humour", "def": "n. (humor) 幽默；幽默感", "img": ""}, {"id": 176, "word": "thanks to", "def": "归功于；由于；因为", "img": ""}, {"id": 177, "word": "less", "def": "adj. 较少的；更少的 adv. 较少地；更少地 pron. 较少；更少", "img": ""}, {"id": 178, "word": "straightforward", "def": "adj. 坦率的；简单的", "img": ""}, {"id": 179, "word": "opinion", "def": "n. 看法；意见", "img": ""}, {"id": 180, "word": "make a mistake", "def": "犯错误", "img": ""}, {"id": 181, "word": "honest", "def": "adj. 坦诚的；诚实的", "img": ""}, {"id": 182, "word": "direct", "def": "adj. 率直的；直接的", "img": ""}, {"id": 183, "word": "similarity", "def": "n. 相似之处", "img": ""}, {"id": 184, "word": "friendship", "def": "n. 友谊；友情", "img": ""}, {"id": 185, "word": "metre", "def": "n. (meter) 米", "img": ""}, {"id": 186, "word": "prince", "def": "n. 王子", "img": ""}, {"id": 187, "word": "character", "def": "n. 人物；个性", "img": ""}, {"id": 188, "word": "pauper", "def": "n. 贫民；乞丐", "img": ""}, {"id": 189, "word": "exchange", "def": "v. & n. 交换", "img": ""}, {"id": 190, "word": "accident", "def": "n. 意外；(交通)事故", "img": ""}, {"id": 191, "word": "by accident", "def": "偶然；意外地", "img": ""}, {"id": 192, "word": "expect", "def": "v. 预料；期待", "img": ""}, {"id": 193, "word": "silver", "def": "adj. 银色的 n. 银", "img": ""}, {"id": 194, "word": "silver lining", "def": "一线光明", "img": ""}, {"id": 195, "word": "situation", "def": "n. 情况；状况", "img": ""}, {"id": 196, "word": "care about", "def": "关心；担心", "img": ""}, {"id": 197, "word": "reach", "def": "v. 伸手；达到", "img": ""}, {"id": 198, "word": "reach for", "def": "伸手触碰", "img": ""}, {"id": 199, "word": "touch", "def": "v. 感动；触碰", "img": ""}, {"id": 200, "word": "lend (sb) a hand", "def": "帮助(某人)", "img": ""}, {"id": 201, "word": "Julie", "def": "朱莉", "img": ""}, {"id": 202, "word": "Matt", "def": "马特", "img": ""}, {"id": 203, "word": "Stephen", "def": "斯蒂芬", "img": ""}, {"id": 204, "word": "Diana", "def": "戴安娜", "img": ""}, {"id": 205, "word": "Edward", "def": "爱德华", "img": ""}, {"id": 206, "word": "Mark Twain", "def": "马克·吐温", "img": ""}, {"id": 207, "word": "Rose", "def": "罗丝", "img": ""}, {"id": 208, "word": "Chicago", "def": "芝加哥(美国城市)", "img": ""}, {"id": 209, "word": "moss", "def": "n. 苔藓", "img": ""}, {"id": 210, "word": "redwood", "def": "n. 红杉；红木", "img": ""}, {"id": 211, "word": "cheetah", "def": "n. 猎豹", "img": ""}, {"id": 212, "word": "folding", "def": "adj. 折叠式的；可折叠的", "img": ""}, {"id": 213, "word": "folding fan", "def": "折扇", "img": ""}, {"id": 214, "word": "bamboo", "def": "n. 竹；竹子", "img": ""}, {"id": 215, "word": "yeah", "def": "interj. 是的；对", "img": ""}, {"id": 216, "word": "popular", "def": "adj. 广受欢迎的；流行的", "img": ""}, {"id": 217, "word": "goodness", "def": "n. 美德；营养", "img": ""}, {"id": 218, "word": "tool", "def": "n. 工具；手段", "img": ""}, {"id": 219, "word": "actually", "def": "adv. 实际上；居然", "img": ""}, {"id": 220, "word": "shoot", "def": "n. 幼苗；嫩芽 v. (shot) 开(枪)；射击", "img": ""}, {"id": 221, "word": "appear", "def": "v. 出现；呈现", "img": ""}, {"id": 222, "word": "feel free (to do sth)", "def": "可以随便做某事", "img": ""}, {"id": 223, "word": "land", "def": "n. 陆地；土地 v. 降落；着陆", "img": ""}, {"id": 224, "word": "African", "def": "adj. 非洲的；非洲人的 n. 非洲人", "img": ""}, {"id": 225, "word": "rose", "def": "n. 玫瑰；蔷薇", "img": ""}, {"id": 226, "word": "peony", "def": "n. 牡丹；芍药", "img": ""}, {"id": 227, "word": "lotus", "def": "n. 莲花", "img": ""}, {"id": 228, "word": "butterfly", "def": "n. 蝴蝶", "img": ""}, {"id": 229, "word": "wing", "def": "n. 翅膀；翼", "img": ""}, {"id": 230, "word": "frog", "def": "n. 蛙；青蛙", "img": ""}, {"id": 231, "word": "weigh", "def": "v. 有……重；称重量", "img": ""}, {"id": 232, "word": "kg", "def": "千克；公斤", "img": ""}, {"id": 233, "word": "ginkgo", "def": "n. 银杏", "img": ""}, {"id": 234, "word": "province", "def": "n. 省份", "img": ""}, {"id": 235, "word": "take a walk", "def": "散步", "img": ""}, {"id": 236, "word": "connect", "def": "v. 关联；连接", "img": ""}, {"id": 237, "word": "connected", "def": "adj. 连接的；相关的", "img": ""}, {"id": 238, "word": "be connected with / to", "def": "与……相连；与……有关联", "img": ""}, {"id": 239, "word": "without", "def": "prep. 没有；缺乏", "img": ""}, {"id": 240, "word": "imagine", "def": "v. 想象；猜想", "img": ""}, {"id": 241, "word": "honey", "def": "n. 蜂蜜；(爱称)亲爱的", "img": ""}, {"id": 242, "word": "disappointed", "def": "adj. 失望的；沮丧的", "img": ""}, {"id": 243, "word": "connection", "def": "n. 联系；连接", "img": ""}, {"id": 244, "word": "pollination", "def": "n. 授粉", "img": ""}, {"id": 245, "word": "pollen", "def": "n. 花粉", "img": ""}, {"id": 246, "word": "action", "def": "n. 行动；行为", "img": ""}, {"id": 247, "word": "in fact", "def": "确切地说；实际上", "img": ""}, {"id": 248, "word": "percent", "def": "n. 百分之…… adj. & adv. 每一百中", "img": ""}, {"id": 249, "word": "for this reason", "def": "出于这个原因", "img": ""}, {"id": 250, "word": "planet", "def": "n. 行星", "img": ""}, {"id": 251, "word": "in order to", "def": "为了；以便", "img": ""}, {"id": 252, "word": "store", "def": "v. 贮存；存储 n. 百货商店；商店", "img": ""}, {"id": 253, "word": "honeycomb", "def": "n. 蜂巢", "img": ""}, {"id": 254, "word": "communicate", "def": "v. 交流；沟通", "img": ""}, {"id": 255, "word": "play a part (in sth)", "def": "参与某事", "img": ""}, {"id": 256, "word": "ecosystem", "def": "n. 生态系统", "img": ""}, {"id": 257, "word": "protect", "def": "v. 保护；防护", "img": ""}, {"id": 258, "word": "importance", "def": "n. 重要性", "img": ""}, {"id": 259, "word": "title", "def": "n. 标题；题目；名称", "img": ""}, {"id": 260, "word": "human", "def": "adj. 人的；人类的", "img": ""}, {"id": 261, "word": "ant", "def": "n. 蚂蚁", "img": ""}, {"id": 262, "word": "be home to sb / sth", "def": "是……的家乡", "img": ""}, {"id": 263, "word": "happiness", "def": "n. 幸福；快乐", "img": ""}, {"id": 264, "word": "disappoint", "def": "v. 使失望；使破灭", "img": ""}, {"id": 265, "word": "mushroom", "def": "n. 蘑菇；伞菌", "img": ""}, {"id": 266, "word": "ton", "def": "n. 吨", "img": ""}, {"id": 267, "word": "role", "def": "n. 作用；职能；角色", "img": ""}, {"id": 268, "word": "play a role (in)", "def": "在……中发挥作用；扮演角色", "img": ""}, {"id": 269, "word": "pea", "def": "n. 豌豆", "img": ""}, {"id": 270, "word": "climate", "def": "n. 气候", "img": ""}, {"id": 271, "word": "ocean", "def": "n. 大海；海洋", "img": ""}, {"id": 272, "word": "except", "def": "prep. 除……之外；除了", "img": ""}, {"id": 273, "word": "tiny", "def": "adj. 极小的；微小的", "img": ""}, {"id": 274, "word": "live up to", "def": "达到；符合", "img": ""}, {"id": 275, "word": "lively", "def": "adj. 精力充沛的；生机勃勃的", "img": ""}, {"id": 276, "word": "the Arctic / Ocean", "def": "北冰洋", "img": ""}, {"id": 277, "word": "Billy", "def": "比利", "img": ""}, {"id": 278, "word": "pepper", "def": "n. 胡椒粉；菜椒", "img": ""}, {"id": 279, "word": "cut up", "def": "切碎；剁碎", "img": ""}, {"id": 280, "word": "mix", "def": "v. (使)混合；融合；调配 n. 混合；混杂；混合料", "img": ""}, {"id": 281, "word": "bake", "def": "v. 烘焙", "img": ""}, {"id": 282, "word": "oven", "def": "n. 烤箱；烤炉", "img": ""}, {"id": 283, "word": "pour sth into sth", "def": "将……倒入……", "img": ""}, {"id": 284, "word": "flour", "def": "n. 面粉", "img": ""}, {"id": 285, "word": "boil", "def": "v. 煮沸；烧开 n. 沸腾；沸点", "img": ""}, {"id": 286, "word": "butter", "def": "n. 黄油", "img": ""}, {"id": 287, "word": "cheese", "def": "n. 奶酪；干酪", "img": ""}, {"id": 288, "word": "cut sth in / into sth", "def": "将……切成……", "img": ""}, {"id": 289, "word": "tablespoon", "def": "n. 一汤匙(的量)；餐匙；汤匙", "img": ""}, {"id": 290, "word": "mash", "def": "v. 捣烂；捣碎", "img": ""}, {"id": 291, "word": "mashed potatoes", "def": "土豆泥", "img": ""}, {"id": 292, "word": "stir-fry", "def": "v. 翻炒；炒；煸", "img": ""}, {"id": 293, "word": "do with", "def": "处理", "img": ""}, {"id": 294, "word": "bowl", "def": "n. 碗；钵；盆", "img": ""}, {"id": 295, "word": "heat", "def": "v. 加热；变热 n. 热；温度；炎热天气", "img": ""}, {"id": 296, "word": "oil", "def": "n. 食用油；石油；燃油", "img": ""}, {"id": 297, "word": "pan", "def": "n. 平底锅；烤盘", "img": ""}, {"id": 298, "word": "put sth back", "def": "将……放回", "img": ""}, {"id": 299, "word": "mix ... with ...", "def": "(使)……和……混合", "img": ""}, {"id": 300, "word": "simple", "def": "adj. 简单的；朴素的", "img": ""}, {"id": 301, "word": "ingredient", "def": "n. 材料；食材", "img": ""}, {"id": 302, "word": "instruction", "def": "n. 用法说明；操作指南", "img": ""}, {"id": 303, "word": "steamed fish", "def": "清蒸鱼", "img": ""}, {"id": 304, "word": "hot and sour soup", "def": "酸辣汤", "img": ""}, {"id": 305, "word": "mess", "def": "n. 脏乱；凌乱", "img": ""}, {"id": 306, "word": "pretty", "def": "adj. 漂亮的；美丽的 adv. 相当；十分；非常", "img": ""}, {"id": 307, "word": "Christmas", "def": "n. 圣诞节", "img": ""}, {"id": 308, "word": "pancake", "def": "n. 烙饼；薄饼", "img": ""}, {"id": 309, "word": "dream", "def": "n. 梦想；梦 v. (dreamt / dreamed) 做梦；梦见；梦想", "img": ""}, {"id": 310, "word": "university", "def": "n. (综合性)大学；高等学府", "img": ""}, {"id": 311, "word": "go boating", "def": "去划船", "img": ""}, {"id": 312, "word": "memory", "def": "n. 回忆；记忆", "img": ""}, {"id": 313, "word": "visible", "def": "adj. 看得见的；可见的", "img": ""}, {"id": 314, "word": "along with sb / sth", "def": "除……以外(还)；与……同样地", "img": ""}, {"id": 315, "word": "pumpkin", "def": "n. 南瓜", "img": ""}, {"id": 316, "word": "pie", "def": "n. 果馅饼；肉馅饼", "img": ""}, {"id": 317, "word": "warm up", "def": "(使)活跃起来；热身；预热", "img": ""}, {"id": 318, "word": "cinnamon", "def": "n. 肉桂皮；桂皮香料", "img": ""}, {"id": 319, "word": "fill ... with ...", "def": "(使)充满；(使)填满", "img": ""}, {"id": 320, "word": "sweetness", "def": "n. 甜；芬芳；愉悦", "img": ""}, {"id": 321, "word": "college", "def": "n. 学院；大学", "img": ""}, {"id": 322, "word": "host", "def": "n. 主人；东道主 v. 主办；主持(活动)", "img": ""}, {"id": 323, "word": "hostess", "def": "n. 女主人；女房东", "img": ""}, {"id": 324, "word": "recipe", "def": "n. 食谱；烹饪法", "img": ""}, {"id": 325, "word": "cream", "def": "n. 奶油；护肤霜；奶油色", "img": ""}, {"id": 326, "word": "crust", "def": "n. 糕饼酥皮；面包皮", "img": ""}, {"id": 327, "word": "mixture", "def": "n. 混合物；结合体", "img": ""}, {"id": 328, "word": "least", "def": "adv. & pron. 最小；最少", "img": ""}, {"id": 329, "word": "at least", "def": "至少", "img": ""}, {"id": 330, "word": "secret", "def": "n. 诀窍；秘密 adj. 秘密的；隐秘的", "img": ""}, {"id": 331, "word": "according to", "def": "根据；依照", "img": ""}, {"id": 332, "word": "whenever", "def": "adv. & conj. 每当；在任何……的时候", "img": ""}, {"id": 333, "word": "item", "def": "n. 项目", "img": ""}, {"id": 334, "word": "spaghetti", "def": "n. 意大利细面条", "img": ""}, {"id": 335, "word": "spoon", "def": "n. (spoonful) 一勺的量；勺", "img": ""}, {"id": 336, "word": "slice", "def": "n. 薄片；片 v. 把……切成薄片；切；割", "img": ""}, {"id": 337, "word": "couple", "def": "n. 夫妻；情侣；两人", "img": ""}, {"id": 338, "word": "island", "def": "n. 岛", "img": ""}, {"id": 339, "word": "wife", "def": "n. (pl. wives) 妻子", "img": ""}, {"id": 340, "word": "separate", "def": "adj. 单独的；分开的 v. (使)分开；(使)分离", "img": ""}, {"id": 341, "word": "born", "def": "v. 出生；出世 adj. 天生(有某方面才能)的", "img": ""}, {"id": 342, "word": "one by one", "def": "逐个地；逐一地", "img": ""}, {"id": 343, "word": "Thanksgiving", "def": "感恩节", "img": ""}, {"id": 344, "word": "Guoqiao Rice Noodles", "def": "过桥米线", "img": ""}, {"id": 345, "word": "yourself", "def": "pron. (pl. yourselves) 你自己；您自己", "img": ""}, {"id": 346, "word": "engineer", "def": "n. 工程师；技师", "img": ""}, {"id": 347, "word": "fashion", "def": "n. 时装业；时尚", "img": ""}, {"id": 348, "word": "designer", "def": "n. 设计师", "img": ""}, {"id": 349, "word": "director", "def": "n. 导演；主任；董事", "img": ""}, {"id": 350, "word": "musician", "def": "n. 音乐家；乐师", "img": ""}, {"id": 351, "word": "fireman", "def": "n. (pl. firemen) 消防队员", "img": ""}, {"id": 352, "word": "AI (artificial intelligence)", "def": "人工智能", "img": ""}, {"id": 353, "word": "essay", "def": "n. 小品文；文章", "img": ""}, {"id": 354, "word": "classic", "def": "n. 经典作品；名著 adj. 最优秀的；古典的", "img": ""}, {"id": 355, "word": "keep on doing sth", "def": "继续做；反复做", "img": ""}, {"id": 356, "word": "make sure", "def": "确保；保证", "img": ""}, {"id": 357, "word": "try one's best", "def": "尽最大努力", "img": ""}, {"id": 358, "word": "literature", "def": "n. 文学；文献", "img": ""}, {"id": 359, "word": "athlete", "def": "n. 运动员", "img": ""}, {"id": 360, "word": "photographer", "def": "n. 摄影师；拍照者", "img": ""}, {"id": 361, "word": "painter", "def": "n. 画家；油漆匠", "img": ""}, {"id": 362, "word": "businessman", "def": "n. 商界人士；企业家", "img": ""}, {"id": 363, "word": "actress", "def": "n. 女演员", "img": ""}, {"id": 364, "word": "lawyer", "def": "n. 律师", "img": ""}, {"id": 365, "word": "law", "def": "n. 法律；法规", "img": ""}, {"id": 366, "word": "bath", "def": "n. 洗澡；浴缸", "img": ""}, {"id": 367, "word": "miss", "def": "v. 想念；错过", "img": ""}, {"id": 368, "word": "be tired of", "def": "对……感到厌倦", "img": ""}, {"id": 369, "word": "able", "def": "adj. 能够；有才能的", "img": ""}, {"id": 370, "word": "stick", "def": "v. (stuck) 粘贴；将……刺入 n. 枝条；棍", "img": ""}, {"id": 371, "word": "stick to sth", "def": "坚持；维持", "img": ""}, {"id": 372, "word": "resolution", "def": "n. 决定；决议", "img": ""}, {"id": 373, "word": "have (...) to do with sb / sth", "def": "与……有关系", "img": ""}, {"id": 374, "word": "mini-goal", "def": "n. 小目标", "img": ""}, {"id": 375, "word": "achieve", "def": "v. (经过努力)达到；完成", "img": ""}, {"id": 376, "word": "physical", "def": "adj. 身体的；物质的", "img": ""}, {"id": 377, "word": "health", "def": "n. 健康", "img": ""}, {"id": 378, "word": "healthily", "def": "adv. 健康地", "img": ""}, {"id": 379, "word": "take up", "def": "开始学；开始从事", "img": ""}, {"id": 380, "word": "photography", "def": "n. 照相术；摄影", "img": ""}, {"id": 381, "word": "self-improvement", "def": "n. 自我改进；自我提高", "img": ""}, {"id": 382, "word": "confident", "def": "adj. 自信的；肯定的", "img": ""}, {"id": 383, "word": "organized", "def": "adj. 有条理的；有组织的", "img": ""}, {"id": 384, "word": "wisely", "def": "adv. 聪明地；明智地", "img": ""}, {"id": 385, "word": "possible", "def": "adj. 可能的；合理的", "img": ""}, {"id": 386, "word": "paragraph", "def": "n. 段；段落", "img": ""}, {"id": 387, "word": "introduce", "def": "v. 介绍；引见；引进", "img": ""}, {"id": 388, "word": "meaning", "def": "n. 意义；含义", "img": ""}, {"id": 389, "word": "fail", "def": "v. 未能(做到)；失败", "img": ""}, {"id": 390, "word": "ahead", "def": "adv. 提前；在前面", "img": ""}, {"id": 391, "word": "put out", "def": "扑灭；把……摆好", "img": ""}, {"id": 392, "word": "design", "def": "v. 设计；计划 n. 设计；花纹", "img": ""}, {"id": 393, "word": "bridge", "def": "n. 桥", "img": ""}, {"id": 394, "word": "final", "def": "adj. 最后的；最终的 n. 决赛", "img": ""}, {"id": 395, "word": "confidence", "def": "n. 信心；信任", "img": ""}, {"id": 396, "word": "draw to a close", "def": "即将结束；即将完成", "img": ""}, {"id": 397, "word": "form", "def": "v. (使)形成；组成 n. 类型；形式", "img": ""}, {"id": 398, "word": "relationship", "def": "n. 关系；联系", "img": ""}, {"id": 399, "word": "push-up", "def": "n. 俯卧撑", "img": ""}, {"id": 400, "word": "energetic", "def": "adj. 精力充沛的；充满活力的", "img": ""}, {"id": 401, "word": "last but not least", "def": "最后但同等重要的", "img": ""}, {"id": 402, "word": "Jason", "def": "贾森", "img": ""}, {"id": 403, "word": "Tina", "def": "蒂娜", "img": ""}, {"id": 404, "word": "prediction", "def": "n. 预测；预言", "img": ""}, {"id": 405, "word": "outer", "def": "adj. 外围的；外表的", "img": ""}, {"id": 406, "word": "outer space", "def": "太空；外层空间", "img": ""}, {"id": 407, "word": "worse", "def": "adj. 更差的；更糟的；更坏的 adv. 更差；更糟；更坏", "img": ""}, {"id": 408, "word": "take over", "def": "接替；接管；接收", "img": ""}, {"id": 409, "word": "sci-fi (science fiction)", "def": "科幻小说(或影片等)", "img": ""}, {"id": 410, "word": "ticket", "def": "n. 票；券", "img": ""}, {"id": 411, "word": "positive", "def": "adj. 乐观的；积极的；良好的", "img": ""}, {"id": 412, "word": "traffic", "def": "n. 交通；运输 v. (非法)进行交易；做……买卖", "img": ""}, {"id": 413, "word": "technology", "def": "n. 科技；工艺", "img": ""}, {"id": 414, "word": "video", "def": "n. 视频；录像系统 v. 录视频；给……录像", "img": ""}, {"id": 415, "word": "transport", "def": "n. 交通运输系统；旅行方式 v. 运输；运送", "img": ""}, {"id": 416, "word": "system", "def": "n. 系统", "img": ""}, {"id": 417, "word": "efficient", "def": "adj. 效率高的；有功效的", "img": ""}, {"id": 418, "word": "education", "def": "n. 教育", "img": ""}, {"id": 419, "word": "length", "def": "n. 时长；长度", "img": ""}, {"id": 420, "word": "topic", "def": "n. 话题；题目；标题", "img": ""}, {"id": 421, "word": "partner", "def": "n. 搭档；同伴", "img": ""}, {"id": 422, "word": "shall", "def": "modal v. (should) 将要；将会", "img": ""}, {"id": 423, "word": "pass", "def": "v. 及格；通过 n. 及格；通行证", "img": ""}, {"id": 424, "word": "winner", "def": "n. 优胜者；成功者", "img": ""}, {"id": 425, "word": "cure", "def": "n. 药物；疗法 v. 治愈；治好", "img": ""}, {"id": 426, "word": "cancer", "def": "n. 癌症", "img": ""}, {"id": 427, "word": "concert", "def": "n. 音乐会；演奏会", "img": ""}, {"id": 428, "word": "cash", "def": "n. 现金；金钱 v. 兑现", "img": ""}, {"id": 429, "word": "wallet", "def": "n. 钱包；皮夹", "img": ""}, {"id": 430, "word": "guest", "def": "n. 客人；宾客", "img": ""}, {"id": 431, "word": "author", "def": "n. 作者；作家", "img": ""}, {"id": 432, "word": "best-selling", "def": "adj. 畅销的", "img": ""}, {"id": 433, "word": "futurist", "def": "n. 未来学家", "img": ""}, {"id": 434, "word": "everywhere", "def": "adv. pron. & conj. 到处；所有地方", "img": ""}, {"id": 435, "word": "service", "def": "n. 服务；公共服务", "img": ""}, {"id": 436, "word": "disaster", "def": "n. 灾难；不幸", "img": ""}, {"id": 437, "word": "emergency", "def": "n. 突发事件；紧急情况", "img": ""}, {"id": 438, "word": "disappear", "def": "v. 消失；不见", "img": ""}, {"id": 439, "word": "challenging", "def": "adj. 挑战性的", "img": ""}, {"id": 440, "word": "pilot", "def": "n. 飞行员；领航员", "img": ""}, {"id": 441, "word": "expert", "def": "n. 专家；行家 adj. 熟练的；内行的", "img": ""}, {"id": 442, "word": "replace", "def": "v. 代替；取代", "img": ""}, {"id": 443, "word": "creativity", "def": "n. 创造力", "img": ""}, {"id": 444, "word": "emotional", "def": "adj. 情感的；情绪的", "img": ""}, {"id": 445, "word": "intelligence", "def": "n. 智力；智慧", "img": ""}, {"id": 446, "word": "emotional intelligence", "def": "情绪智力", "img": ""}, {"id": 447, "word": "mention", "def": "v. 提到；写到", "img": ""}, {"id": 448, "word": "refrigerator", "def": "n. (fridge) 冰箱", "img": ""}, {"id": 449, "word": "accept", "def": "v. 接受；相信", "img": ""}, {"id": 450, "word": "influence", "def": "v. 影响；对……起作用 n. 影响；作用", "img": ""}, {"id": 451, "word": "creative", "def": "adj. 创造性的；创作的", "img": ""}, {"id": 452, "word": "impossible", "def": "adj. 不可能的", "img": ""}, {"id": 453, "word": "vs (versus)", "def": "(表示双方对阵)对；对抗", "img": ""}, {"id": 454, "word": "quality", "def": "n. 素质；质量；品质 adj. 优质的；高质量的", "img": ""}, {"id": 455, "word": "develop", "def": "v. 增强；发展；开发", "img": ""}, {"id": 456, "word": "German", "def": "n. 德语；德国人 adj. 德国的", "img": ""}, {"id": 457, "word": "valuable", "def": "adj. 很有用的；宝贵的", "img": ""}, {"id": 458, "word": "challenge", "def": "n. 挑战；质疑 v. 向(某人)挑战；对……质疑", "img": ""}, {"id": 459, "word": "public", "def": "adj. 公共的；公众的", "img": ""}, {"id": 460, "word": "medical", "def": "adj. 医学的；医疗的", "img": ""}, {"id": 461, "word": "industry", "def": "n. 行业；工业", "img": ""}, {"id": 462, "word": "task", "def": "n. 任务；工作", "img": ""}, {"id": 463, "word": "depend", "def": "v. 取决于；依靠", "img": ""}, {"id": 464, "word": "depend on / upon", "def": "取决于；依靠", "img": ""}, {"id": 465, "word": "Jennifer", "def": "珍妮弗", "img": ""}, {"id": 466, "word": "Harry", "def": "哈里；哈丽", "img": ""}, {"id": 467, "word": "Pete", "def": "皮特", "img": ""}, {"id": 468, "word": "Roberts", "def": "罗伯茨", "img": ""}, {"id": 469, "word": "Asimov", "def": "阿西莫夫", "img": ""}, {"id": 470, "word": "France", "def": "法国", "img": ""}, {"id": 471, "word": "Mandy", "def": "曼迪", "img": ""}, {"id": 472, "word": "communication", "def": "n. 表达；交流", "img": ""}, {"id": 473, "word": "face to face", "def": "面对面", "img": ""}, {"id": 474, "word": "text message", "def": "(手机)短信", "img": ""}, {"id": 475, "word": "sign", "def": "n. 手势；迹象；标志 v. 签(名)；签字", "img": ""}, {"id": 476, "word": "speaker", "def": "n. 说话者；发言者", "img": ""}, {"id": 477, "word": "rehearsal", "def": "n. 排演；排练", "img": ""}, {"id": 478, "word": "show sb around", "def": "领某人参观", "img": ""}, {"id": 479, "word": "local", "def": "adj. 当地的；地方的 n. 当地人；本地人", "img": ""}, {"id": 480, "word": "face-to-face", "def": "adj. 面对面的", "img": ""}, {"id": 481, "word": "professor", "def": "n. 教授", "img": ""}, {"id": 482, "word": "in person", "def": "亲自；亲身", "img": ""}, {"id": 483, "word": "speech", "def": "n. 演讲；发言", "img": ""}, {"id": 484, "word": "argue", "def": "v. 争论；争吵", "img": ""}, {"id": 485, "word": "make up (with sb)", "def": "与……言归于好", "img": ""}, {"id": 486, "word": "prefer", "def": "v. 较喜欢", "img": ""}, {"id": 487, "word": "calm", "def": "adj. 镇静的；沉着的 v. 使平静；使镇静", "img": ""}, {"id": 488, "word": "worry about", "def": "为……担心", "img": ""}, {"id": 489, "word": "expression", "def": "n. 表达方式；表达", "img": ""}, {"id": 490, "word": "chance", "def": "n. 机会；可能性 adj. 意外的；偶然的", "img": ""}, {"id": 491, "word": "meeting", "def": "n. 会面；会议", "img": ""}, {"id": 492, "word": "difficulty", "def": "n. 困难；难题", "img": ""}, {"id": 493, "word": "right away", "def": "立即；马上", "img": ""}, {"id": 494, "word": "line", "def": "n. 字行；便条；线", "img": ""}, {"id": 495, "word": "drop sb a line", "def": "给……写信", "img": ""}, {"id": 496, "word": "detail", "def": "n. 细节；详情", "img": ""}, {"id": 497, "word": "reunion", "def": "n. 团聚；重逢；聚会", "img": ""}, {"id": 498, "word": "seriously", "def": "adv. 严肃地；认真地", "img": ""}, {"id": 499, "word": "training", "def": "n. 训练；培训", "img": ""}, {"id": 500, "word": "nervous", "def": "adj. 担忧的；焦虑的；胆怯的", "img": ""}, {"id": 501, "word": "stranger", "def": "n. 陌生人", "img": ""}, {"id": 502, "word": "tip", "def": "n. 指点；实用的提示；尖端 v. (使)倾斜；倒出；给小费", "img": ""}, {"id": 503, "word": "carefully", "def": "adv. 认真地；仔细地；小心地", "img": ""}, {"id": 504, "word": "show interest in sth", "def": "对……表现出兴趣", "img": ""}, {"id": 505, "word": "listener", "def": "n. 听者", "img": ""}, {"id": 506, "word": "point", "def": "n. 观点；重点 v. 指向；瞄准", "img": ""}, {"id": 507, "word": "surely", "def": "adv. 想必；必定", "img": ""}, {"id": 508, "word": "continue", "def": "v. 持续；继续做", "img": ""}, {"id": 509, "word": "impolite", "def": "adj. 不礼貌的；粗鲁的", "img": ""}, {"id": 510, "word": "personal", "def": "adj. 个人的；私人的", "img": ""}, {"id": 511, "word": "argue with sb", "def": "与某人争论", "img": ""}, {"id": 512, "word": "move on (to sth)", "def": "换话题；开始做(别的事)", "img": ""}, {"id": 513, "word": "sincere", "def": "adj. 真诚的；诚实的", "img": ""}, {"id": 514, "word": "find out", "def": "查明；弄清(情况)", "img": ""}, {"id": 515, "word": "pay", "def": "v. (paid) 付费；交纳；偿还 n. 工资；薪水", "img": ""}, {"id": 516, "word": "attention", "def": "n. 注意；专心；关注", "img": ""}, {"id": 517, "word": "pay attention (to ...)", "def": "注意；关注", "img": ""}, {"id": 518, "word": "be yourself", "def": "行为自然；不做作", "img": ""}, {"id": 519, "word": "offer", "def": "v. 提供；主动提出 n. 主动提议；出价", "img": ""}, {"id": 520, "word": "reasonable", "def": "adj. 公平的；合理的", "img": ""}, {"id": 521, "word": "social", "def": "adj. 社会的；社交的 n. 联谊会；联欢会", "img": ""}, {"id": 522, "word": "medium", "def": "n. (pl. media) 媒介；手段", "img": ""}, {"id": 523, "word": "social media", "def": "社交媒体", "img": ""}, {"id": 524, "word": "trust", "def": "n. & v. 信任；相信", "img": ""}, {"id": 525, "word": "keep (...) away from ...", "def": "(使)远离；避免……靠近", "img": ""}, {"id": 526, "word": "misunderstanding", "def": "n. 误解；误会", "img": ""}, {"id": 527, "word": "event", "def": "n. 公开活动；重要事情", "img": ""}, {"id": 528, "word": "take place", "def": "发生；进行", "img": ""}, {"id": 529, "word": "cost", "def": "n. 费用；价钱；代价 v. 价格为；使损失；使付出努力", "img": ""}, {"id": 530, "word": "opportunity", "def": "n. 机会；时机", "img": ""}, {"id": 531, "word": "benefit", "def": "v. 对……有用；使受益 n. 益处；成效", "img": ""}, {"id": 532, "word": "benefit ... from ...", "def": "从……获益", "img": ""}, {"id": 533, "word": "reply", "def": "n. & v. 回答；回复", "img": ""}, {"id": 534, "word": "honour", "def": "n. (honor) 荣幸；尊敬 v. 给……荣誉；表彰", "img": ""}, {"id": 535, "word": "sincerely", "def": "adv. 真诚地；诚实地", "img": ""}, {"id": 536, "word": "opening", "def": "adj. 开端的；开始的 n. 开始；孔；洞", "img": ""}, {"id": 537, "word": "closing", "def": "adj. 结尾的；结束的 n. 停业；关闭", "img": ""}, {"id": 538, "word": "sentence", "def": "n. 句子；判决 v. 判决；宣判", "img": ""}, {"id": 539, "word": "date", "def": "n. 日期；日子 v. 确定年代；注明日期", "img": ""}, {"id": 540, "word": "clause", "def": "n. 从句；分句", "img": ""}, {"id": 541, "word": "Susan", "def": "苏珊", "img": ""}, {"id": 542, "word": "Jones", "def": "琼斯", "img": ""}];
+
+    // ============================================
+    // STATE
+    // ============================================
+    let allWords = [];
+    let currentWord = null;
+    let favorites = JSON.parse(localStorage.getItem('pass_exam_v6_favs')) || [];
+    let seenIndices = new Set();
+    let isSpellMode = false;
+    let currentMode = 'random';
+    let currentIndexOrder = -1;
+    let wordHistory = []; // 用于"上一个"功能
+    let historyPointer = -1;
+
+    // ============================================
+    // DOM REFERENCES
+    // ============================================
+    const $ = id => document.getElementById(id);
+    const flashcard = $('flashcard');
+    const cardContainer = $('card-container');
+    const cardZone = $('card-zone');
+    const spellInput = $('spell-input');
+
+    // ============================================
+    // FILE HANDLING
+    // ============================================
+    $('excel-upload').addEventListener('change', handleFile);
+    $('img-upload').addEventListener('change', handleImageUpload);
+
+    function handleFile(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, {type: 'array'});
+            const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+            const jsonData = XLSX.utils.sheet_to_json(firstSheet, {header: 1});
+
+            allWords = jsonData.slice(1).map((row, index) => ({
+                id: index,
+                word: row[0],
+                def: row[1],
+                img: row[2]
+            })).filter(item => item.word);
+
+            if (allWords.length > 0) {
+                initApp();
+            } else {
+                alert("表格内容为空或格式不对，请确保有数据！");
+            }
+        };
+        reader.readAsArrayBuffer(file);
+    }
+
+    function handleImageUpload(e) {
+        if (e && e.target && e.target.files && e.target.files[0]) {
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                $('custom-img-display').src = evt.target.result;
+                renderCardImage();
+            };
+            reader.readAsDataURL(e.target.files[0]);
+        }
+    }
+
+    // ============================================
+    // APP INIT
+    // ============================================
+    function initApp() {
+        seenIndices.clear();
+        currentIndexOrder = -1;
+        wordHistory = [];
+        historyPointer = -1;
+
+        $('hint-msg').style.display = 'none';
+        cardZone.style.display = 'flex';
+        $('action-area').style.display = 'flex';
+        $('progress-box').style.display = 'flex';
+        $('mode-switch').style.display = 'flex';
+        updateFavBadge();
+        updateProgressUI();
+
+        // 首次使用显示教程
+        if (!localStorage.getItem('ipad_tutorial_seen')) {
+            $('tutorial').style.display = 'flex';
+        }
+
+        nextCard();
+    }
+
+    function dismissTutorial() {
+        $('tutorial').style.display = 'none';
+        localStorage.setItem('ipad_tutorial_seen', '1');
+    }
+
+    // ============================================
+    // MODE SWITCH
+    // ============================================
+    function setMode(mode) {
+        currentMode = mode;
+        $('btn-random').className = mode === 'random' ? 'mode-btn active' : 'mode-btn';
+        $('btn-order').className = mode === 'order' ? 'mode-btn active' : 'mode-btn';
+    }
+
+    // ============================================
+    // CARD NAVIGATION
+    // ============================================
+    function nextCardTrigger() { nextCard(); }
+
+    function nextCard() {
+        flashcard.classList.remove('flipped');
+        spellInput.value = '';
+        $('spell-feedback').innerText = '';
+        $('fav-btn-front').classList.remove('fav-pulse');
+        $('fav-btn-back').classList.remove('fav-pulse');
+
+        setTimeout(() => {
+            let targetWord = null;
+
+            if (currentMode === 'order') {
+                currentIndexOrder++;
+                if (currentIndexOrder >= allWords.length) {
+                    showCompletion('按顺序复习完了所有单词！');
+                    currentIndexOrder = allWords.length - 1;
+                    return;
+                }
+                targetWord = allWords[currentIndexOrder];
+                seenIndices.add(targetWord.id);
+            } else {
+                if (seenIndices.size >= allWords.length) {
+                    showCompletion('所有单词随机复习完毕！');
+                    return;
+                }
+                let available = allWords.filter(w => !seenIndices.has(w.id));
+                if (available.length === 0) { seenIndices.clear(); available = allWords; }
+                targetWord = available[Math.floor(Math.random() * available.length)];
+                seenIndices.add(targetWord.id);
+            }
+
+            currentWord = targetWord;
+
+            // 历史记录
+            if (historyPointer < wordHistory.length - 1) {
+                wordHistory = wordHistory.slice(0, historyPointer + 1);
+            }
+            wordHistory.push(currentWord);
+            historyPointer = wordHistory.length - 1;
+
+            updateProgressUI();
+            renderCard();
+            // 自动播发音
+            setTimeout(() => playAudio(true), 500);
+        }, 150);
+    }
+
+    function prevCard() {
+        if (historyPointer <= 0) {
+            showSwipeHint('已经是第一个了');
+            return;
+        }
+
+        flashcard.classList.remove('flipped');
+        spellInput.value = '';
+        $('spell-feedback').innerText = '';
+
+        historyPointer--;
+        currentWord = wordHistory[historyPointer];
+
+        if (currentMode === 'order' && currentIndexOrder > 0) {
+            currentIndexOrder--;
+        }
+
+        renderCard();
+        setTimeout(() => playAudio(true), 300);
+    }
+
+    function showCompletion(msg) {
+        const div = document.createElement('div');
+        div.className = 'celebration';
+        div.innerHTML = `
+            <div class="emoji-big">🎉</div>
+            <h2>${msg}</h2>
+            <button class="next-btn" style="margin-top:20px;" onclick="this.parentElement.remove(); resetAndRestart();">
+                再来一轮 <i class="fas fa-redo"></i>
+            </button>
+        `;
+        document.body.appendChild(div);
+    }
+
+    function resetAndRestart() {
+        seenIndices.clear();
+        currentIndexOrder = -1;
+        wordHistory = [];
+        historyPointer = -1;
+        updateProgressUI();
+        nextCard();
+    }
+
+    // ============================================
+    // CARD RENDERING
+    // ============================================
+    function renderCard() {
+        if (!currentWord) return;
+        const wordDisplay = $('word-display');
+
+        if (isSpellMode) {
+            wordDisplay.innerText = "???";
+            $('spell-box').style.display = 'block';
+            // iPad上延迟focus避免键盘跳动
+            setTimeout(() => spellInput.focus(), 400);
+        } else {
+            wordDisplay.innerText = currentWord.word;
+            $('spell-box').style.display = 'none';
+        }
+
+        $('def-display').innerText = currentWord.def || "暂无释义";
+        updateFavIconState();
+        renderCardImage();
+    }
+
+    function renderCardImage() {
+        const stamp = $('default-stamp');
+        const customImg = $('custom-img-display');
+        const excelImg = $('excel-img-display');
+
+        if (currentWord && currentWord.img) {
+            excelImg.src = currentWord.img;
+            excelImg.style.display = 'block';
+            customImg.style.display = 'none';
+            stamp.style.display = 'none';
+        } else if (customImg.src && customImg.src.length > 20) {
+            excelImg.style.display = 'none';
+            customImg.style.display = 'block';
+            stamp.style.display = 'none';
+        } else {
+            excelImg.style.display = 'none';
+            customImg.style.display = 'none';
+            stamp.style.display = 'block';
+        }
+    }
+
+    // ============================================
+    // SPELL MODE
+    // ============================================
+    function toggleSpellMode() {
+        isSpellMode = !isSpellMode;
+        renderCard();
+        const btn = $('mode-btn-text');
+        if (isSpellMode) {
+            btn.classList.add('active');
+            btn.innerHTML = '<i class="fas fa-times"></i> 关闭听写模式';
+        } else {
+            btn.classList.remove('active');
+            btn.innerHTML = '<i class="fas fa-pencil-alt"></i> 开启听写模式';
+        }
+    }
+
+    function checkSpelling() {
+        const input = spellInput.value.trim();
+        const feedback = $('spell-feedback');
+        $('word-display').innerText = currentWord.word;
+
+        if (input.toLowerCase() === currentWord.word.toLowerCase()) {
+            feedback.innerText = "🎉 拼写正确！";
+            feedback.style.color = "green";
+        } else {
+            feedback.innerText = "❌ 拼错了，已加入生词本";
+            feedback.style.color = "red";
+            if (!favorites.some(f => f.word === currentWord.word)) {
+                addToFavorites();
+            }
+        }
+        // 收起键盘
+        spellInput.blur();
+    }
+
+    spellInput.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            checkSpelling();
+        }
+    });
+
+    $('spell-check-btn').addEventListener('click', function(e) {
+        e.stopPropagation();
+        checkSpelling();
+    });
+
+    // ============================================
+    // CARD FLIP
+    // ============================================
+    function flipCard() {
+        flashcard.classList.toggle('flipped');
+        const isFav = favorites.some(f => f.word === currentWord.word);
+        if (!isFav && flashcard.classList.contains('flipped')) {
+            $('fav-btn-back').classList.add('fav-pulse');
+        } else {
+            $('fav-btn-back').classList.remove('fav-pulse');
+        }
+    }
+
+    // ============================================
+    // AUDIO
+    // ============================================
+    function playAudio(isAuto = false) {
+        if (!currentWord) return;
+        const btn = $('audio-btn');
+        btn.classList.add('playing');
+        const utterance = new SpeechSynthesisUtterance(currentWord.word);
+        utterance.lang = 'en-US';
+        utterance.rate = 0.8;
+        utterance.onend = () => btn.classList.remove('playing');
+        utterance.onerror = () => btn.classList.remove('playing');
+        try {
+            window.speechSynthesis.cancel(); // 防止队列堆积
+            window.speechSynthesis.speak(utterance);
+        } catch(e) {}
+    }
+
+    // ============================================
+    // FAVORITES
+    // ============================================
+    function toggleFav() {
+        if (!currentWord) return;
+        const index = favorites.findIndex(f => f.word === currentWord.word);
+        if (index === -1) {
+            favorites.push(currentWord);
+        } else {
+            favorites.splice(index, 1);
+        }
+        localStorage.setItem('pass_exam_v6_favs', JSON.stringify(favorites));
+        updateFavIconState();
+        updateFavBadge();
+    }
+
+    function addToFavorites() {
+        if (!currentWord) return;
+        if (!favorites.some(f => f.word === currentWord.word)) {
+            favorites.push(currentWord);
+            localStorage.setItem('pass_exam_v6_favs', JSON.stringify(favorites));
+            updateFavIconState();
+            updateFavBadge();
+        }
+    }
+
+    function updateFavIconState() {
+        if (!currentWord) return;
+        const isFav = favorites.some(f => f.word === currentWord.word);
+        const cls = isFav ? 'fas fa-heart fav-btn active' : 'far fa-heart fav-btn';
+        $('fav-btn-front').className = cls;
+        $('fav-btn-back').className = cls;
+        if (isFav) {
+            $('fav-btn-front').classList.remove('fav-pulse');
+            $('fav-btn-back').classList.remove('fav-pulse');
+        }
+    }
+
+    function updateFavBadge() {
+        $('fav-count-badge').innerText = favorites.length;
+    }
+
+    function updateProgressUI() {
+        const percentage = allWords.length === 0 ? 0 : Math.round((seenIndices.size / allWords.length) * 100);
+        $('progress-number').innerText = `${seenIndices.size} / ${allWords.length}`;
+        $('progress-fill').style.width = `${percentage}%`;
+    }
+
+    // ============================================
+    // VOCAB BOOK MODAL
+    // ============================================
+    function showVocabBook() {
+        const list = $('vocab-list');
+        list.innerHTML = "";
+        if (favorites.length === 0) {
+            list.innerHTML = '<div style="text-align:center;padding:40px;color:#ccc;font-size:1.1rem;">还没有生词，继续加油！</div>';
+        } else {
+            favorites.forEach(item => {
+                list.innerHTML += `
+                    <div class="vocab-item">
+                        <div><b>${item.word}</b><br><small style="color:#999">${item.def || ''}</small></div>
+                        <div>
+                            <i class="fas fa-volume-up action-icon" style="color:#ffaf40" onclick="speakWord('${item.word}')"></i>
+                            <i class="fas fa-trash-alt action-icon" onclick="removeFav('${item.word}')"></i>
+                        </div>
+                    </div>`;
+            });
+        }
+        $('vocab-modal').style.display = 'flex';
+    }
+
+    function speakWord(word) {
+        const utterance = new SpeechSynthesisUtterance(word);
+        utterance.lang = 'en-US'; utterance.rate = 0.8;
+        window.speechSynthesis.cancel();
+        window.speechSynthesis.speak(utterance);
+    }
+
+    function removeFav(word) {
+        favorites = favorites.filter(f => f.word !== word);
+        localStorage.setItem('pass_exam_v6_favs', JSON.stringify(favorites));
+        showVocabBook();
+        updateFavBadge();
+        if (currentWord && currentWord.word === word) updateFavIconState();
+    }
+
+    function closeModal() { $('vocab-modal').style.display = 'none'; }
+
+    function resetProgress() {
+        if (confirm("重置进度？")) {
+            seenIndices.clear();
+            currentIndexOrder = -1;
+            wordHistory = [];
+            historyPointer = -1;
+            updateProgressUI();
+            nextCard();
+        }
+    }
+
+    // ============================================
+    // TOUCH GESTURE SYSTEM (核心触摸交互)
+    // ============================================
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let touchStartTime = 0;
+    let isSwiping = false;
+    let touchMoved = false;
+    const SWIPE_THRESHOLD = 60; // px
+    const SWIPE_MAX_Y = 80; // 纵向偏移超过这个就不算横滑
+    const TAP_MAX_MOVE = 15; // px以内算tap
+
+    cardContainer.addEventListener('touchstart', onTouchStart, { passive: true });
+    cardContainer.addEventListener('touchmove', onTouchMove, { passive: false });
+    cardContainer.addEventListener('touchend', onTouchEnd, { passive: true });
+
+    function onTouchStart(e) {
+        // 如果是在输入框/按钮区域，不拦截
+        const target = e.target;
+        if (isInteractiveElement(target)) return;
+
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+        touchStartTime = Date.now();
+        touchMoved = false;
+        isSwiping = false;
+        cardContainer.classList.add('swiping');
+    }
+
+    function onTouchMove(e) {
+        if (touchStartX === 0) return;
+        const target = e.target;
+        if (isInteractiveElement(target)) return;
+
+        const dx = e.touches[0].clientX - touchStartX;
+        const dy = e.touches[0].clientY - touchStartY;
+
+        if (Math.abs(dx) > TAP_MAX_MOVE || Math.abs(dy) > TAP_MAX_MOVE) {
+            touchMoved = true;
+        }
+
+        // 横向滑动 > 纵向滑动 → 判定为swipe
+        if (Math.abs(dx) > 20 && Math.abs(dx) > Math.abs(dy)) {
+            isSwiping = true;
+            e.preventDefault(); // 阻止页面滚动
+
+            // 视觉跟手
+            const maxMove = 120;
+            const clampedDx = Math.max(-maxMove, Math.min(maxMove, dx));
+            cardContainer.style.transform = `translateX(${clampedDx}px) rotate(${clampedDx * 0.03}deg)`;
+
+            // 滑动方向提示
+            if (Math.abs(dx) > SWIPE_THRESHOLD / 2) {
+                showSwipeHint(dx > 0 ? '👈 上一个' : '👉 下一个');
+            }
+        }
+    }
+
+    function onTouchEnd(e) {
+        cardContainer.classList.remove('swiping');
+
+        if (isSwiping) {
+            const dx = e.changedTouches[0].clientX - touchStartX;
+            const elapsed = Date.now() - touchStartTime;
+            const velocity = Math.abs(dx) / elapsed; // px/ms
+
+            // 快速滑或距离够
+            if (Math.abs(dx) > SWIPE_THRESHOLD || velocity > 0.5) {
+                if (dx > 0) {
+                    // 右滑 = 上一个
+                    animateSwipe('right', () => prevCard());
+                } else {
+                    // 左滑 = 下一个
+                    animateSwipe('left', () => nextCard());
+                }
+            } else {
+                // 回弹
+                cardContainer.style.transition = 'transform 0.3s ease';
+                cardContainer.style.transform = '';
+                setTimeout(() => cardContainer.style.transition = '', 300);
+            }
+
+            hideSwipeHint();
+            resetTouch();
+            return;
+        }
+
+        // 没有滑动 → 判断tap
+        if (!touchMoved) {
+            const target = e.target;
+            handleCardTap(target);
+        }
+
+        // 回弹
+        cardContainer.style.transform = '';
+        resetTouch();
+    }
+
+    function animateSwipe(direction, callback) {
+        const offset = direction === 'left' ? -window.innerWidth : window.innerWidth;
+        cardContainer.style.transition = 'transform 0.3s ease';
+        cardContainer.style.transform = `translateX(${offset}px) rotate(${offset * 0.02}deg)`;
+
+        setTimeout(() => {
+            cardContainer.style.transition = 'none';
+            cardContainer.style.transform = '';
+            callback();
+            // 从另一侧滑入
+            requestAnimationFrame(() => {
+                cardContainer.style.transform = `translateX(${-offset * 0.3}px)`;
+                requestAnimationFrame(() => {
+                    cardContainer.style.transition = 'transform 0.3s ease';
+                    cardContainer.style.transform = '';
+                    setTimeout(() => cardContainer.style.transition = '', 300);
+                });
+            });
+        }, 250);
+    }
+
+    function resetTouch() {
+        touchStartX = 0;
+        touchStartY = 0;
+        touchStartTime = 0;
+        isSwiping = false;
+        touchMoved = false;
+    }
+
+    function isInteractiveElement(el) {
+        if (!el) return false;
+        // 检查是否是交互元素或其子元素
+        const tag = el.tagName;
+        if (tag === 'INPUT' || tag === 'BUTTON' || tag === 'LABEL' || tag === 'SELECT' || tag === 'TEXTAREA') return true;
+        if (el.closest('[data-action="spell"]')) return true;
+        if (el.closest('[data-action="img-upload"]')) return true;
+        if (el.classList && el.classList.contains('spell-check-btn')) return true;
+        return false;
+    }
+
+    function handleCardTap(target) {
+        // 检查具体的tap目标
+        const favEl = target.closest('[data-action="fav"]') || (target.classList && target.classList.contains('fav-btn') ? target : null);
+        if (favEl) {
+            toggleFav();
+            return;
+        }
+
+        const audioEl = target.closest('[data-action="audio"]');
+        if (audioEl) {
+            playAudio();
+            return;
+        }
+
+        // 如果是图片区域，让label处理
+        if (target.closest('[data-action="img-upload"]')) {
+            return; // label会触发file input
+        }
+
+        // 其他区域 → 翻转卡片
+        flipCard();
+    }
+
+    // ============================================
+    // SWIPE HINT
+    // ============================================
+    function showSwipeHint(text) {
+        const hint = $('swipe-hint');
+        hint.innerText = text;
+        hint.classList.add('visible');
+    }
+
+    function hideSwipeHint() {
+        const hint = $('swipe-hint');
+        hint.classList.remove('visible');
+    }
+
+    // ============================================
+    // MODAL TOUCH HANDLING
+    // ============================================
+    $('vocab-modal').addEventListener('click', function(e) {
+        if (e.target === this) closeModal();
+    });
+
+    // ============================================
+    // iOS KEYBOARD HANDLING
+    // ============================================
+    // 当虚拟键盘弹出时，调整布局
+    if ('visualViewport' in window) {
+        window.visualViewport.addEventListener('resize', () => {
+            const viewport = window.visualViewport;
+            document.body.style.height = `${viewport.height}px`;
+        });
+    }
+
+    // ============================================
+    // PREVENT iOS RUBBER BAND SCROLLING
+    // ============================================
+    document.addEventListener('touchmove', function(e) {
+        // 允许modal内的滚动
+        if (e.target.closest('.vocab-list')) return;
+        // 其他区域阻止
+        if (!e.target.closest('.spell-input')) {
+            // e.preventDefault(); // 只在需要时阻止
+        }
+    }, { passive: true });
+
+    // ============================================
+    // INIT - 自动加载内嵌词库
+    // ============================================
+    updateFavBadge();
+
+    // 页面加载完成后自动启动（使用内嵌数据）
+    window.addEventListener('DOMContentLoaded', () => {
+        if (EMBEDDED_WORDS && EMBEDDED_WORDS.length > 0) {
+            allWords = EMBEDDED_WORDS.map((w, i) => ({...w, id: i}));
+            initApp();
+        }
+    });
+
+    // 如果DOMContentLoaded已经触发（脚本在body底部）
+    if (document.readyState !== 'loading') {
+        if (EMBEDDED_WORDS && EMBEDDED_WORDS.length > 0) {
+            allWords = EMBEDDED_WORDS.map((w, i) => ({...w, id: i}));
+            initApp();
+        }
+    }
+
+    // Service Worker for PWA (如果存在)
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('sw.js').catch(() => {
+            // Service worker not available, that's fine
+        });
+    }
+</script>
+</body>
+</html>
